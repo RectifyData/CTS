@@ -26,7 +26,7 @@ public partial class MainWindow
         }
 
         PersistInk();
-        var dialog = new SaveFileDialog
+        var dialog = new Microsoft.Win32.SaveFileDialog
         {
             Filter = "Animated MP4 video|*.mp4",
             DefaultExt = ".mp4",
