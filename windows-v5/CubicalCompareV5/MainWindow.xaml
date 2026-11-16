@@ -99,7 +99,8 @@
       <Button x:Name="OpenButton" Click="Open_Click" Content="Open project"/>
       <Button x:Name="SaveButton" Click="Save_Click" Content="Save project"/>
       <Button x:Name="ImportButton" Click="Import_Click" Content="Import CSV"/>
-      <Button x:Name="ExportButton" Click="Export_Click" Background="#166B78" Content="Export MP4"/>
+      <Button x:Name="AnimatedExportButton" Click="AnimatedExport_Click" Background="#166B78" Content="Export animated MP4"/>
+      <Button x:Name="ExportButton" Click="Export_Click" Content="Export static MP4 (legacy)"/>
      </StackPanel>
     </Border>
    </Popup>

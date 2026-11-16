@@ -60,7 +60,7 @@ public partial class MainWindow
     {
         ProjectPopup.IsOpen = false;
         HighlightIsland(NavExportButton);
-        Export_Click(sender, e);
+        AnimatedExport_Click(sender, e);
     }
 
     private void NavDraw_Click(object sender, RoutedEventArgs e)
