@@ -352,18 +352,31 @@ def render_video(p: Project, out: Path, fps: int, strict: bool = False) -> None:
     args = [ff, '-hide_banner', '-loglevel', 'error', '-y', '-f', 'rawvideo', '-vcodec', 'rawvideo',
             '-pix_fmt', 'rgb24', '-s', f'{p.width}x{p.height}', '-r', str(fps), '-i', 'pipe:0']
     tracks = [Path(a) for a in p.audio if a]
+    audio_temp = temp.with_name(temp.stem + '.pattern.m4a')
     for a in tracks:
         if not a.is_file():
             raise CLIError(f'Audio file not found: {a}')
+    audio_temp.unlink(missing_ok=True)
+    if len(tracks) > 1:
+        # Normalize arbitrary audio codecs/sample rates before looping the full pattern.
+        pattern = [ff, '-hide_banner', '-loglevel', 'error', '-y']
+        for track in tracks:
+            pattern += ['-i', str(track)]
+        streams = ''.join(f'[{i}:a:0]' for i in range(len(tracks)))
+        pattern += ['-filter_complex', streams + f'concat=n={len(tracks)}:v=0:a=1[a]',
+                    '-map', '[a]', '-c:a', 'aac', '-b:a', '192k', str(audio_temp)]
+        converted = subprocess.run(pattern, capture_output=True, check=False)
+        if converted.returncode != 0:
+            audio_temp.unlink(missing_ok=True)
+            raise CLIError('Could not prepare soundtrack pattern: ' + converted.stderr.decode('utf-8', 'replace')[-3000:])
+        tracks = [audio_temp]
+    for a in tracks:
+        if p.audio_repeat:
+            args += ['-stream_loop', '-1']
         args += ['-i', str(a)]
     if tracks:
-        if len(tracks) == 1:
-            audio_src = '[1:a]'
-        else:
-            audio_src = ''.join(f'[{i}:a:0]' for i in range(1, len(tracks)+1))
-        filters = [audio_src + (f'concat=n={len(tracks)}:v=0:a=1,' if len(tracks)>1 else '') +
-                   f'volume={p.audio_volume},atrim=0:{duration(p):.4f}' +
-                   (f',afade=t=out:st={max(0,duration(p)-.8):.4f}:d=.8' if p.audio_fade else '')+'[finala]']
+        filters = [f'[1:a:0]volume={p.audio_volume},apad,atrim=duration={duration(p):.4f}' +
+                   (f',afade=t=out:st={max(0,duration(p)-0.8):.4f}:d=0.8' if p.audio_fade else '') + '[finala]']
         args += ['-filter_complex', ';'.join(filters), '-map', '0:v:0', '-map', '[finala]', '-c:a', 'aac', '-b:a', '192k']
     else:
         args += ['-an']
@@ -397,6 +410,7 @@ def render_video(p: Project, out: Path, fps: int, strict: bool = False) -> None:
         if proc and proc.stderr:
             proc.stderr.close()
         temp.unlink(missing_ok=True)
+        audio_temp.unlink(missing_ok=True)
 
 
 def main(argv: list[str] | None = None) -> int:

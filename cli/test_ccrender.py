@@ -1,5 +1,7 @@
 import base64
 import io
+import struct
+import wave
 import json
 import tempfile
 import unittest
@@ -41,6 +43,20 @@ class CLITests(unittest.TestCase):
         self.assertGreater(scroll,2)
         frame=cli.render_frame(p,p.duration-.4,cli.Assets())
         self.assertEqual(frame.mode,'RGB')
+
+    def test_repeating_audio_pattern(self):
+        wavefile = self.root/'tone.wav'
+        with wave.open(str(wavefile), 'wb') as audio:
+            audio.setnchannels(1)
+            audio.setsampwidth(2)
+            audio.setframerate(8000)
+            audio.writeframes(b''.join(struct.pack('<h', (i % 40)*100) for i in range(800)))
+        p=cli.Project([cli.Card(title='Audio')],width=320,height=180,fps=8,duration=1.1,
+                      audio=[str(wavefile), str(wavefile)],audio_repeat=True)
+        target=self.root/'sound.mp4'
+        cli.render_video(p,target,8)
+        self.assertGreater(target.stat().st_size,1000)
+        self.assertFalse(list(self.root.glob('*.pattern.m4a')))
 
     def test_invalid_resolution_rejected(self):
         with self.assertRaises(cli.CLIError):
