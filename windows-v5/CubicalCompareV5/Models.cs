@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
+using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace CubicalCompareV5;
@@ -46,6 +47,11 @@ public sealed class ComparisonCard : INotifyPropertyChanged
     // Empty thumbnail artwork means reusing the video card's image, not a blank thumbnail.
     public string ThumbnailArtworkBase64 { get => _thumbnailArtworkBase64; set => Set(ref _thumbnailArtworkBase64, value); }
     public string ThumbnailStrokesBase64 { get => _thumbnailStrokesBase64; set => Set(ref _thumbnailStrokesBase64, value); }
+    // Keep Android-only fields (e.g. ArtworkSource and drawing PNGs) intact when
+    // a project is opened and resaved by the Windows editor.
+    [JsonExtensionData]
+    public Dictionary<string, JsonElement> ExtraProjectCardFields { get; set; } = new();
+
     public ArtworkTransformState ImageTransform { get; set; } = new();
     public ArtworkTransformState ThumbnailTransform { get; set; } = new();
 
@@ -66,6 +72,11 @@ public sealed class ComparisonProject
     public double AudioVolume { get; set; } = 1.0;
     public bool AudioRepeat { get; set; } = true;
     public bool AudioFadeOut { get; set; } = true;
+
+    // Retain Android export preferences, Renderer3 identifiers and future fields.
+    // The Windows UI does not interpret these, but may not erase them on save.
+    [JsonExtensionData]
+    public Dictionary<string, JsonElement> ExtraProjectFields { get; set; } = new();
 }
 
 public sealed class AppSettings

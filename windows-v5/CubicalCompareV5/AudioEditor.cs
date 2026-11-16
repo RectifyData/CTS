@@ -167,14 +167,17 @@ public partial class MainWindow
         finally { _audioControlsUpdating = false; }
     }
 
-    private ComparisonProject BuildProjectSnapshot() => new()
+    private ComparisonProject BuildProjectSnapshot()
     {
-        Cards = _cards,
-        AudioTracks = _audioTracks.Select(t => t.FullPath).ToList(),
-        AudioVolume = _audioVolume,
-        AudioRepeat = _audioRepeat,
-        AudioFadeOut = _audioFadeOut
-    };
+        // Update only the fields owned by Windows. Unrecognized JSON properties,
+        // including Android Renderer3/export settings, survive every save.
+        _loadedProject.Cards = _cards;
+        _loadedProject.AudioTracks = _audioTracks.Select(t => t.FullPath).ToList();
+        _loadedProject.AudioVolume = _audioVolume;
+        _loadedProject.AudioRepeat = _audioRepeat;
+        _loadedProject.AudioFadeOut = _audioFadeOut;
+        return _loadedProject;
+    }
 
     // Mixed codecs are normal for creator playlists; normalise to stereo/48k
     // and concatenate before muxing. The resulting temporary AAC file can

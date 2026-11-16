@@ -41,6 +41,7 @@ public partial class MainWindow : Window
     private double _dragStartY;
     private string? _projectPath;
     private AppSettings _settings = new();
+    private ComparisonProject _loadedProject = new();
     private static readonly string SettingsFile = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "CubicalCompareV5", "settings.json");
@@ -554,6 +555,7 @@ public partial class MainWindow : Window
         ReplaceCards(new[] { new ComparisonCard { Title = "First comparison", BadgeHeader = "Rank", Badge = "1" } });
         _projectPath = null;
         LoadAudioFromProject(new ComparisonProject());
+        _loadedProject = new ComparisonProject();
         UpdateTitle();
     }
 
@@ -601,6 +603,7 @@ public partial class MainWindow : Window
             if (project is null || project.FormatVersion != 5) throw new InvalidDataException("Not a V5 project.");
             ReplaceCards(project.Cards ?? new ObservableCollection<ComparisonCard>());
             LoadAudioFromProject(project);
+            _loadedProject = project;
             _projectPath = dialog.FileName;
             UpdateTitle();
             StatusLabel.Text = "Loaded: " + Path.GetFileName(dialog.FileName);
@@ -682,6 +685,7 @@ public partial class MainWindow : Window
             if (!CheckUnsaved()) return;
             ReplaceCards(cards);
             LoadAudioFromProject(new ComparisonProject());
+            _loadedProject = new ComparisonProject();
             _projectPath = null;
             UpdateTitle();
             StatusLabel.Text = $"Imported {cards.Count} cards.";
