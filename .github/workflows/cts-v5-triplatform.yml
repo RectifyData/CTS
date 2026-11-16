@@ -1,0 +1,182 @@
+name: Cubical Compare V5 — Windows, Android and standalone CLI
+on:
+  push:
+    branches: [android-main-preview]
+    paths:
+      - 'cli/**'
+      - 'windows-v5/**'
+      - 'android-v5/**'
+      - '.github/workflows/cts-v5-triplatform.yml'
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  cli:
+    name: CLI ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install and test
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r cli/requirements.txt pyinstaller
+          python -m unittest discover -s cli -p 'test_*.py' -v
+      - name: Build self-contained command
+        run: python -m PyInstaller --clean --noconfirm --onefile --name ccrender --collect-all imageio_ffmpeg cli/ccrender.py
+      - name: Standalone smoke test (Unix)
+        if: runner.os == 'Linux'
+        run: |
+          chmod +x dist/ccrender
+          dist/ccrender inspect cli/examples/demo.csv
+          dist/ccrender render cli/examples/demo.csv -o cli-smoke.mp4 --width 640 --height 360 --fps 8 --duration 1.0
+          test -s cli-smoke.mp4
+      - name: Standalone smoke test (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          & dist/ccrender.exe inspect cli/examples/demo.csv
+          if ($LASTEXITCODE -ne 0) { throw 'CLI inspect failed' }
+          & dist/ccrender.exe render cli/examples/demo.csv -o cli-smoke.mp4 --width 640 --height 360 --fps 8 --duration 1.0
+          if ($LASTEXITCODE -ne 0 -or !(Test-Path cli-smoke.mp4)) { throw 'CLI MP4 render failed' }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ runner.os == 'Windows' && 'cts-cli-windows' || 'cts-cli-linux' }}
+          path: ${{ runner.os == 'Windows' && 'dist/ccrender.exe' || 'dist/ccrender' }}
+          if-no-files-found: error
+  windows:
+    runs-on: windows-latest
+    needs: cli
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Create Windows icon
+        shell: pwsh
+        run: ./windows-v5/tools/make-icon.ps1
+      - name: Build Windows V5 app
+        shell: pwsh
+        run: dotnet publish windows-v5/CubicalCompareV5/CubicalCompareV5.csproj -c Release -r win-x64 --self-contained true -o windows-v5/publish
+      - name: Include standalone CLI with Windows app
+        uses: actions/download-artifact@v4
+        with:
+          name: cts-cli-windows
+          path: windows-v5/publish
+      - name: Native startup and renderer editor regressions
+        shell: pwsh
+        run: |
+          $exe = (Resolve-Path windows-v5/publish/CubicalCompareV5.exe).Path
+          if (!(Test-Path windows-v5/publish/ccrender.exe)) { throw 'Missing standalone CLI' }
+          $proc = Start-Process -FilePath $exe -PassThru
+          try {
+            Start-Sleep -Seconds 4
+            $proc.Refresh()
+            if ($proc.HasExited) { throw 'Windows UI closed during startup' }
+          }
+          finally { if (!$proc.HasExited) { Stop-Process -Id $proc.Id -Force } }
+          foreach ($arg in @('--self-test-thumbnail', '--self-test-island')) {
+            $proc = Start-Process -FilePath $exe -ArgumentList $arg -PassThru -Wait
+            if ($proc.ExitCode -ne 0) { throw "WPF regression failed: $arg" }
+          }
+      - name: Build visible NSIS setup and portable archive
+        shell: pwsh
+        run: |
+          choco install nsis -y --no-progress
+          $src = (Resolve-Path windows-v5/publish).Path
+          $setup = Join-Path $env:GITHUB_WORKSPACE "CubicalCompare-V5-Windows-Setup.exe"
+          & "C:\Program Files (x86)\NSIS\makensis.exe" "/DAPP_SOURCE=$src" "/DOUT_FILE=$setup" windows-v5/installer/setup.nsi
+          if ($LASTEXITCODE -ne 0 -or !(Test-Path $setup)) { throw 'Installer failed' }
+          Compress-Archive -Path "windows-v5/publish/*" -DestinationPath CubicalCompare-V5-Windows-Portable.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cts-v5-windows
+          if-no-files-found: error
+          path: |
+            CubicalCompare-V5-Windows-Setup.exe
+            CubicalCompare-V5-Windows-Portable.zip
+  android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 80
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Install Android SDK / NDK
+        shell: bash
+        run: |
+          SDK_ROOT="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+          SDK_MANAGER="$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
+          if [ ! -x "$SDK_MANAGER" ]; then SDK_MANAGER="$SDK_ROOT/cmdline-tools/16.0/bin/sdkmanager"; fi
+          test -x "$SDK_MANAGER"
+          ( set +o pipefail; yes | "$SDK_MANAGER" --sdk_root="$SDK_ROOT" --licenses >/dev/null )
+          "$SDK_MANAGER" --sdk_root="$SDK_ROOT" 'platforms;android-36' 'build-tools;36.0.0' 'ndk;27.2.12479018'
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android,armv7-linux-androideabi,x86_64-linux-android
+      - name: Rust engine tests
+        run: cargo test --manifest-path android-v5/rust/Cargo.toml
+      - name: Build Rust JNI for Android ABIs
+        shell: bash
+        run: |
+          cargo install cargo-ndk --locked
+          SDK_ROOT="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+          export ANDROID_NDK_HOME="$SDK_ROOT/ndk/27.2.12479018"
+          cd android-v5/rust
+          cargo ndk -t arm64-v8a -t armeabi-v7a -t x86_64 -o ../app/src/main/jniLibs build --release
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.13'
+      - name: Restore stable debug signing identity
+        uses: actions/cache@v4
+        with:
+          path: ~/.android/debug.keystore
+          key: cts-v5-android-preview-debug-signing-v1
+      - name: Unit tests and build APK
+        run: gradle --project-dir android-v5 :app:testDebugUnitTest :app:assembleDebug --no-daemon --stacktrace --console=plain
+      - name: Check APK
+        run: |
+          test -s android-v5/app/build/outputs/apk/debug/app-debug.apk
+          unzip -l android-v5/app/build/outputs/apk/debug/app-debug.apk | grep -q 'lib/arm64-v8a/libcts_engine.so'
+          cp android-v5/app/build/outputs/apk/debug/app-debug.apk CubicalCompare-V5-Android-debug.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cts-v5-android
+          path: CubicalCompare-V5-Android-debug.apk
+          if-no-files-found: error
+  release:
+    needs: [cli, windows, android]
+    if: ${{ success() }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: release
+      - name: Prepare release assets and checksums
+        run: |
+          cp release/cts-cli-linux/ccrender release/ccrender-linux-x64
+          cp release/cts-cli-windows/ccrender.exe release/ccrender-windows-x64.exe
+          cp release/cts-v5-windows/CubicalCompare-V5-Windows-Setup.exe release/
+          cp release/cts-v5-windows/CubicalCompare-V5-Windows-Portable.zip release/
+          cp release/cts-v5-android/CubicalCompare-V5-Android-debug.apk release/
+          cd release
+          sha256sum ccrender-linux-x64 ccrender-windows-x64.exe CubicalCompare-V5-Windows-Setup.exe CubicalCompare-V5-Windows-Portable.zip CubicalCompare-V5-Android-debug.apk > SHA256SUMS.txt
+      - name: Publish prerelease only after all tests/builds succeed
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          TAG="v5.0.0-triplatform-preview.${{ github.run_number }}"
+          gh release create "$TAG" release/ccrender-linux-x64 release/ccrender-windows-x64.exe release/CubicalCompare-V5-Windows-Setup.exe release/CubicalCompare-V5-Windows-Portable.zip release/CubicalCompare-V5-Android-debug.apk release/SHA256SUMS.txt \
+            --repo "${{ github.repository }}" --target "$GITHUB_SHA" --prerelease \
+            --title "Cubical Compare V5 Windows + Android + CLI preview ${{ github.run_number }}" \
+            --notes "Features: Windows V5 visible NSIS installer and portable ZIP, Android V5 Rust/Compose debug APK, self-contained Linux/Windows CLI with animated CSV and .ccv5 rendering. Bug fixes: preview/export share one CLI render path; custom duration scales the animation so later cards are not cut off; RGB24 frame pipeline is validated. Limitations: native pixel parity and physical Android device smoke are not yet verified. Experimental prerelease."
