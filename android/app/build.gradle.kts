@@ -7,6 +7,20 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
+// Native CI/release builds require the Rust library; legacy JVM-only development
+// remains possible when the NDK/cargo-ndk toolchain is not installed.
+val ctsBuildRust = providers.environmentVariable("CTS_BUILD_RUST").orNull == "1"
+val rustOutput = layout.buildDirectory.dir("generated/ctsRust/jniLibs")
+val rustSource = rootProject.layout.projectDirectory.dir("native")
+val buildRustCore = tasks.register<Exec>("buildRustCore") {
+    onlyIf { ctsBuildRust }
+    workingDir(rustSource.asFile)
+    inputs.files(fileTree(rustSource.asFile) { include("Cargo.toml", "Cargo.lock", "src/**") })
+    outputs.dir(rustOutput)
+    commandLine("cargo", "ndk", "-t", "arm64-v8a", "-t", "armeabi-v7a", "-t", "x86_64",
+        "-p", "26", "-o", rustOutput.get().asFile.absolutePath, "build", "--release", "--locked")
+}
+
 val ctsKeystorePath = providers.environmentVariable("CTS_ANDROID_KEYSTORE_PATH").orNull
 val ctsStorePassword = providers.environmentVariable("CTS_ANDROID_KEYSTORE_PASSWORD").orNull
 val ctsKeyAlias = providers.environmentVariable("CTS_ANDROID_KEY_ALIAS").orNull
@@ -35,11 +49,16 @@ android {
         applicationId = "io.github.retrofrost.cts.android.v5"
         minSdk = 26
         targetSdk = 36
-        versionCode = 5000003
-        versionName = "5.0.0-android-m3"
+        versionCode = 5000004
+        versionName = "5.0.0-android-m4-rust"
+        buildConfigField("boolean", "CTS_RUST_REQUIRED", ctsBuildRust.toString())
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true
+    }
+
+    if (ctsBuildRust) {
+        sourceSets.getByName("main").jniLibs.srcDir(rustOutput)
     }
 
     signingConfigs {
@@ -80,6 +99,8 @@ android {
         resources.excludes += "/META-INF/{AL2.0,LGPL2.1}"
     }
 }
+
+if (ctsBuildRust) tasks.named("preBuild").configure { dependsOn(buildRustCore) }
 
 kotlin {
     compilerOptions {

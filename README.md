@@ -2,7 +2,7 @@
 
 ![Version](https://img.shields.io/github/v/release/RetroFrost/CTS?display_name=tag&sort=semver)
 ![Desktop](https://img.shields.io/badge/desktop-Python%20%2B%20PySide6-41cd52)
-![Android](https://img.shields.io/badge/android-Kotlin%20%2B%20Compose-3ddc84)
+![Android](https://img.shields.io/badge/android-Rust%20%2B%20Jetpack%20Compose-3ddc84)
 ![License](https://img.shields.io/badge/license-CC0-lightgrey)
 
 **CVM (Comparison Video Maker)** is a cross-platform tool for creating continuously scrolling comparison videos from structured data, artwork, and optional audio.
@@ -118,7 +118,7 @@ The desktop application uses **Python + PySide6** and provides the editing, prev
 
 ### Android
 
-The Android application uses **Kotlin + Jetpack Compose** with the same shared project semantics and timing rules.
+Android v5 uses **Rust + Kotlin / Jetpack Compose**. Its native Rust frame core shares timing and animation evaluation between preview and export; Android Canvas and MediaCodec remain platform adapters. AI integrations are deprecated for Android v5. See [Android build and migration notes](android/README.md).
 
 Because the UI and renderer implementations are native to each platform, a renderer or interaction change may require corresponding work on both Android and desktop rather than a direct source-code translation.
 

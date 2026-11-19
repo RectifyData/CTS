@@ -48,3 +48,37 @@ reinstallation; permanent production signing is a future milestone.
 - Where present, the Renderer3 package's embedded M4A soundtrack is extracted to private app storage and selected automatically when no other soundtrack is already chosen.
 - Renderer3 packages that use other Windows-only legacy engines still receive an explanatory error instead of an inaccurate approximation.
 - Requires a genuine wrapped **ribbon-exact** engine. Non-ribbon Windows engine types and packages requiring unsupported overlays are still rejected instead of incorrectly rendering.
+
+
+## M4: Rust + Jetpack Compose (preview)
+
+Android v5 uses Kotlin / Jetpack Compose for editor UI, Android Canvas for painting
+and MediaCodec for MP4 encoding. The dependency-free Rust core in `native/`
+now evaluates built-in timeline easing, Renderer3 keyframe easing and SmartBadge
+frame selection for both preview and export through JNI. Existing project
+identifiers and Renderer3 archive formats are unchanged.
+
+AI integrations are deprecated for Android v5. No AI SDK, provider API key or
+AI background service is required. Local artwork and CSV import are unaffected;
+optional user-specified remote artwork is not an AI integration. Desktop legacy
+AI code is outside this Android migration.
+
+Native build (JDK 17, Gradle 8.13, SDK 36, NDK 27.2.12479018, Rust stable):
+
+```bash
+rustup target add aarch64-linux-android armv7-linux-androideabi x86_64-linux-android
+cargo install cargo-ndk --locked
+cargo test --manifest-path android/native/Cargo.toml --locked
+CTS_BUILD_RUST=1 gradle --project-dir android :app:testDebugUnitTest :app:assembleDebug
+```
+
+Set ANDROID_NDK_HOME to the installed NDK directory. The preview workflow runs
+Rust and Kotlin tests and verifies all three native libraries in the APK before
+publishing the M4 debug prerelease. Non-native host builds retain the Kotlin
+reference implementation. In a native Android build, a missing or incompatible
+Rust library is an explicit error, not an unnoticed performance fallback.
+
+This is an incremental native-core migration, not completion of every v5
+feature. Android Canvas painting, archive decoding and MediaCodec remain Kotlin.
+Device-level playback/export tests, unsupported legacy renderer engines and
+production signing remain outstanding.

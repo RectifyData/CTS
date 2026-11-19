@@ -1,4 +1,4 @@
-name: CTS V5 Android M3 Wrapped Renderer3
+name: CTS V5 Android M4 Rust + Compose
 
 on:
   push:
@@ -42,28 +42,49 @@ jobs:
           fi
           test -x "$SDK_MANAGER"
           ( set +o pipefail; yes | "$SDK_MANAGER" --sdk_root="$SDK_ROOT" --licenses >/dev/null )
-          "$SDK_MANAGER" --sdk_root="$SDK_ROOT" 'platforms;android-36' 'build-tools;36.0.0'
+          "$SDK_MANAGER" --sdk_root="$SDK_ROOT" 'platforms;android-36' 'build-tools;36.0.0' 'ndk;27.2.12479018'
+          echo "ANDROID_NDK_HOME=$SDK_ROOT/ndk/27.2.12479018" >> "$GITHUB_ENV"
       - name: Set up Gradle 8.13
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.13'
+      - name: Install Rust and Android targets
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+          rustup target add aarch64-linux-android armv7-linux-androideabi x86_64-linux-android
+          cargo install cargo-ndk --locked
+      - name: Test Rust renderer core
+        run: cargo test --manifest-path android/native/Cargo.toml --locked
       - name: Run tests and build signed debug APK
+        env:
+          CTS_BUILD_RUST: '1'
         run: gradle --project-dir android :app:testDebugUnitTest :app:assembleDebug --no-daemon --stacktrace --console=plain
+      - name: Verify packaged Rust libraries
+        run: |
+          python - <<'PY'
+          from zipfile import ZipFile
+          with ZipFile('android/app/build/outputs/apk/debug/app-debug.apk') as apk:
+              for abi in ('arm64-v8a', 'armeabi-v7a', 'x86_64'):
+                  path = f'lib/{abi}/libcts_render_core.so'
+                  assert path in apk.namelist(), f'Missing {path}'
+                  assert apk.read(path).startswith(b'\x7fELF'), f'Invalid ELF: {path}'
+          PY
       - name: Name APK
-        run: cp android/app/build/outputs/apk/debug/app-debug.apk CTS-V5-Android-M3-Renderer3-Wrapped-debug.apk
+        run: cp android/app/build/outputs/apk/debug/app-debug.apk CTS-V5-Android-M4-Rust-debug.apk
       - uses: actions/upload-artifact@v4
         with:
-          name: CTS-V5-Android-M3-Renderer3-Wrapped-debug
-          path: CTS-V5-Android-M3-Renderer3-Wrapped-debug.apk
+          name: CTS-V5-Android-M4-Rust-debug
+          path: CTS-V5-Android-M4-Rust-debug.apk
           if-no-files-found: error
       - name: Publish Android V5 prerelease
         if: github.event_name == 'push' && github.ref == 'refs/heads/v5/development'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          TAG=v5.0.0-android-m3-renderer3-wrapped-preview.1
+          TAG=v5.0.0-android-m4-rust-preview.1
           if gh release view "$TAG" >/dev/null 2>&1; then
-            echo "Android M2 Renderer3 preview was already published; preserving its release assets."
+            echo "Android M4 Rust preview was already published; preserving its release assets."
             exit 0
           fi
-          gh release create "$TAG" CTS-V5-Android-M3-Renderer3-Wrapped-debug.apk --target "$GITHUB_SHA" --title "Cubical Compare V5 Android M3 — Wrapped Renderer3" --prerelease --notes "Android V5 M3: supports wrapped CCRNDR01 ribbon-exact renderers inside Renderer3 ZIP packages, SmartCard live jsparse text and artwork, per-card SmartBadge v2 sequence packs, source frame motion and adaptive duration. Unsupported non-ribbon legacy engines still fail explicitly. Debug signed APK; production signing is not configured."
+          gh release create "$TAG" CTS-V5-Android-M4-Rust-debug.apk --target "$GITHUB_SHA" --title "Cubical Compare V5 Android M4 — Rust + Compose" --prerelease --notes "Native Rust frame easing and SmartBadge selection for Android Renderer3 and built-in timelines; existing Compose UI and MediaCodec export retained. No AI SDK or API key required. Debug-signed preview, not final v5; unsupported legacy renderer types remain unsupported. Device validation and production signing pending."

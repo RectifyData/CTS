@@ -1,5 +1,6 @@
 package io.github.retrofrost.cts.android.renderer3
 
+import io.github.retrofrost.cts.android.nativecore.RustFrameCore
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.ByteArrayInputStream
@@ -28,10 +29,8 @@ internal class SmartSequenceV3 private constructor(
         for (part in parts) {
             val length = part.frames.size + part.pause
             if (length == 0) continue
-            if (part.count == 0 || remaining < length.toLong() * part.count) {
-                val index = (remaining % length).coerceAtMost(part.frames.lastIndex)
-                return Frame(part.frames[index], part.offset + index)
-            }
+            val index = RustFrameCore.sequenceIndex(remaining, part.frames.size, part.pause, part.count)
+            if (index >= 0) return Frame(part.frames[index], part.offset + index)
             remaining -= (length.toLong() * part.count).coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
             last = Frame(part.frames.last(), part.offset + part.frames.lastIndex)
         }

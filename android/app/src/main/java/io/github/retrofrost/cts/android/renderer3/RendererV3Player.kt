@@ -1,5 +1,7 @@
 package io.github.retrofrost.cts.android.renderer3
 
+import io.github.retrofrost.cts.android.nativecore.RustFrameCore
+
 import android.content.Context
 import io.github.retrofrost.cts.android.model.CtsProject
 import android.graphics.Bitmap
@@ -333,13 +335,12 @@ internal class RendererV3Player(context: Context, selection: RendererV3Selection
         val a = asFloat(left, Float.NaN)
         val b = asFloat(right, Float.NaN)
         if (!a.isFinite() || !b.isFinite()) return null
-        val t = input.coerceIn(0f, 1f)
-        val eased = when (style) {
-            "smoothstep", "cubic-in-out" -> t * t * (3f - 2f * t)
-            "cubic-in" -> t * t * t
-            "cubic-out" -> 1f - (1f - t).pow(3)
-            else -> t
-        }
+        val eased = RustFrameCore.ease(input, when (style) {
+            "smoothstep", "cubic-in-out" -> RustFrameCore.SMOOTH
+            "cubic-in" -> RustFrameCore.CUBIC_IN
+            "cubic-out" -> RustFrameCore.CUBIC_OUT
+            else -> RustFrameCore.LINEAR
+        })
         return a + (b - a) * eased
     }
 

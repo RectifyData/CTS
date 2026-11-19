@@ -6,6 +6,7 @@ import io.github.retrofrost.cts.android.model.ModelMode
 import io.github.retrofrost.cts.android.model.NormalizedRect
 import io.github.retrofrost.cts.android.model.VisualModel
 import io.github.retrofrost.cts.android.shared.SharedContract
+import io.github.retrofrost.cts.android.nativecore.RustFrameCore
 import kotlin.math.floor
 import kotlin.math.max
 import kotlin.math.min
@@ -662,33 +663,10 @@ object TimelineEngine {
         return "%d:%02d".format(total / 60, total % 60)
     }
 
-    private fun materialEase(value: Float): Float {
-        val x = value.coerceIn(0f, 1f)
-        if (x <= 0f) return 0f
-        if (x >= 1f) return 1f
-        var low = 0f
-        var high = 1f
-        repeat(12) {
-            val t = (low + high) / 2f
-            val curveX = cubic(t, SharedContract.MATERIAL_EASE_X1, SharedContract.MATERIAL_EASE_X2)
-            if (curveX < x) low = t else high = t
-        }
-        return cubic(
-            (low + high) / 2f,
-            SharedContract.MATERIAL_EASE_Y1,
-            SharedContract.MATERIAL_EASE_Y2,
-        )
-    }
+    private fun materialEase(value: Float): Float = RustFrameCore.material(
+        value, SharedContract.MATERIAL_EASE_X1, SharedContract.MATERIAL_EASE_Y1,
+        SharedContract.MATERIAL_EASE_X2, SharedContract.MATERIAL_EASE_Y2,
+    )
 
-    private fun cubic(t: Float, firstControl: Float, secondControl: Float): Float {
-        val inverse = 1f - t
-        return 3f * inverse * inverse * t * firstControl +
-            3f * inverse * t * t * secondControl +
-            t * t * t
-    }
-
-    private fun smoothStep(value: Float): Float {
-        val t = value.coerceIn(0f, 1f)
-        return t * t * (3f - 2f * t)
-    }
+    private fun smoothStep(value: Float): Float = RustFrameCore.ease(value, RustFrameCore.SMOOTH)
 }

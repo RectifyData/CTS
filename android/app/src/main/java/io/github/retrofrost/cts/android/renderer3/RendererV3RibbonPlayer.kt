@@ -1,5 +1,7 @@
 package io.github.retrofrost.cts.android.renderer3
 
+import io.github.retrofrost.cts.android.nativecore.RustFrameCore
+
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
@@ -105,15 +107,15 @@ internal class RendererV3RibbonPlayer(
         }
         val a = list[low - 1]; val b = list[low]
         val t = ((frame - a.frame).toFloat() / max(1, b.frame - a.frame)).coerceIn(0f, 1f)
-        val eased = when (b.easing.lowercase()) {
-            "ease-in", "easein" -> t*t
-            "ease-out", "easeout" -> 1 - (1-t)*(1-t)
-            "ease-in-out", "easeinout", "smoothstep" -> t*t*(3-2*t)
-            "cubic-in" -> t*t*t
-            "cubic-out" -> 1-(1-t)*(1-t)*(1-t)
-            "hold", "step" -> 0f
-            else -> t
-        }
+        val eased = RustFrameCore.ease(t, when (b.easing.lowercase()) {
+            "ease-in", "easein" -> RustFrameCore.QUAD_IN
+            "ease-out", "easeout" -> RustFrameCore.QUAD_OUT
+            "ease-in-out", "easeinout", "smoothstep" -> RustFrameCore.SMOOTH
+            "cubic-in" -> RustFrameCore.CUBIC_IN
+            "cubic-out" -> RustFrameCore.CUBIC_OUT
+            "hold", "step" -> RustFrameCore.HOLD
+            else -> RustFrameCore.LINEAR
+        })
         return a.value + (b.value - a.value)*eased
     }
     private fun cardStart(index: Int): Int = if (index < starts.length()) starts.optInt(index)
@@ -141,7 +143,7 @@ internal class RendererV3RibbonPlayer(
         for (i in 0 until active) result[i] = i*pitch
         val local = frame-cardStart(active)
         val progress = (local.toFloat()/max(1,legacy.optInt("bodySlideFrames",80))).coerceIn(0f,1f)
-        val eased = progress*progress*(3-2*progress)
+        val eased = RustFrameCore.ease(progress, RustFrameCore.SMOOTH)
         result[active] = motion("ribbon.open.$active.card.x",local)
             ?: if (active==0) -pitch+pitch*eased else (active-1)*pitch+pitch*eased
         return result
