@@ -100,7 +100,14 @@ android {
     }
 }
 
-if (ctsBuildRust) tasks.named("preBuild").configure { dependsOn(buildRustCore) }
+if (ctsBuildRust) tasks.matching { it.name == "preBuild" }.configureEach { dependsOn(buildRustCore) }
+
+// Host JNI parity tests use the host-built Rust library, not the Android ELF.
+if (providers.environmentVariable("CTS_TEST_NATIVE").orNull == "1") {
+    tasks.withType<org.gradle.api.tasks.testing.Test>().configureEach {
+        systemProperty("java.library.path", rustSource.dir("target/debug").asFile.absolutePath)
+    }
+}
 
 kotlin {
     compilerOptions {

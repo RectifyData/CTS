@@ -55,10 +55,13 @@ jobs:
           rustup target add aarch64-linux-android armv7-linux-androideabi x86_64-linux-android
           cargo install cargo-ndk --locked
       - name: Test Rust renderer core
-        run: cargo test --manifest-path android/native/Cargo.toml --locked
+        run: |
+          cargo test --manifest-path android/native/Cargo.toml --locked
+          cargo build --manifest-path android/native/Cargo.toml --locked
       - name: Run tests and build signed debug APK
         env:
           CTS_BUILD_RUST: '1'
+          CTS_TEST_NATIVE: '1'
         run: gradle --project-dir android :app:testDebugUnitTest :app:assembleDebug --no-daemon --stacktrace --console=plain
       - name: Verify packaged Rust libraries
         run: |
@@ -82,7 +85,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          TAG=v5.0.0-android-m4-rust-preview.1
+          TAG=v5.0.0-android-m4-rust-preview.2
           if gh release view "$TAG" >/dev/null 2>&1; then
             echo "Android M4 Rust preview was already published; preserving its release assets."
             exit 0

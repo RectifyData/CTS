@@ -5,6 +5,12 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class RustFrameCoreTest {
+    @Test fun requiredHostJniLibraryIsActuallyLoaded() {
+        if (System.getenv("CTS_TEST_NATIVE") == "1") {
+            assertTrue("CI must exercise native JNI, not Kotlin fallback", RustFrameCore.nativeAvailable)
+        }
+    }
+
     @Test fun sequencePauseRepeatAndEnd() {
         assertEquals(-1, RustFrameCore.sequenceIndex(-1, 3, 2, 2))
         assertEquals(0, RustFrameCore.sequenceIndex(0, 3, 2, 2))
