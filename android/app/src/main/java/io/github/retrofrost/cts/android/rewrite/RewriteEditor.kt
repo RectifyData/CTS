@@ -35,6 +35,7 @@ import io.github.retrofrost.cts.android.model.CtsProject
 import io.github.retrofrost.cts.android.persistence.ProjectJson
 import io.github.retrofrost.cts.android.renderer3.RendererV3Container
 import io.github.retrofrost.cts.android.timeline.TimelineEngine
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collect
@@ -58,7 +59,7 @@ internal fun RewriteEditor(session: EditorSession, store: ProjectStore) {
     var editing by rememberSaveable { mutableStateOf<String?>(null) }
     var mediaTarget by rememberSaveable { mutableStateOf<String?>(null) }
     var showPaste by rememberSaveable { mutableStateOf(false) }
-    var pasteText by rememberSaveable { mutableStateOf("") }
+    var pasteText by remember { mutableStateOf("") }
     var showRename by rememberSaveable { mutableStateOf(false) }
     var showNew by rememberSaveable { mutableStateOf(false) }
     var requestedWork by rememberSaveable { mutableStateOf<String?>(null) }
@@ -83,6 +84,7 @@ internal fun RewriteEditor(session: EditorSession, store: ProjectStore) {
         busy = true
         scope.launch {
             try { onSuccess(withContext(Dispatchers.IO) { block() }) }
+            catch (e: CancellationException) { throw e }
             catch (e: Exception) { notify(e.message ?: "The operation failed") }
             finally { busy = false }
         }
@@ -264,9 +266,11 @@ internal fun RewriteEditor(session: EditorSession, store: ProjectStore) {
         },
         snackbarHost = { SnackbarHost(snack) },
     ) { padding ->
-        Column(Modifier.fillMaxSize().padding(padding).padding(horizontal = 16.dp)) {
+        BoxWithConstraints(Modifier.fillMaxSize().padding(padding)) {
+          val previewLimit = maxHeight * 0.42f
+          Column(Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
             if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())
-            FramePreview(project, position, Modifier.fillMaxWidth())
+            FramePreview(project, position, Modifier.fillMaxWidth().heightIn(max = previewLimit))
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 IconButton(enabled = ready, onClick = {
                     if (position >= duration) position = 0f
@@ -361,6 +365,7 @@ internal fun RewriteEditor(session: EditorSession, store: ProjectStore) {
             }
         }
     }
+    }
 
     val card = project.cards.firstOrNull { it.id == editing }
     if (card != null) CardDialog(card, onClose = { editing = null }, onSave = { updated ->
@@ -425,11 +430,11 @@ private fun MediaRow(title: String, detail: String, enabled: Boolean, choose: ()
 
 @Composable
 private fun CardDialog(card: CtsCard, onClose: () -> Unit, onSave: (CtsCard) -> Unit, onDuplicate: () -> Unit, onDelete: () -> Unit) {
-    var title by rememberSaveable(card.id) { mutableStateOf(card.title) }
-    var badge by rememberSaveable(card.id) { mutableStateOf(card.badgePrimary) }
-    var label by rememberSaveable(card.id) { mutableStateOf(card.badgeSecondary) }
-    var description by rememberSaveable(card.id) { mutableStateOf(card.description) }
-    var source by rememberSaveable(card.id) { mutableStateOf(card.imageSubcard.source.orEmpty()) }
+    var title by remember(card.id) { mutableStateOf(card.title) }
+    var badge by remember(card.id) { mutableStateOf(card.badgePrimary) }
+    var label by remember(card.id) { mutableStateOf(card.badgeSecondary) }
+    var description by remember(card.id) { mutableStateOf(card.description) }
+    var source by remember(card.id) { mutableStateOf(card.imageSubcard.source.orEmpty()) }
     var zoom by rememberSaveable(card.id) { mutableFloatStateOf(card.imageSubcard.cropZoom) }
     var focusX by rememberSaveable(card.id) { mutableFloatStateOf(card.imageSubcard.cropFocusX) }
     var focusY by rememberSaveable(card.id) { mutableFloatStateOf(card.imageSubcard.cropFocusY) }

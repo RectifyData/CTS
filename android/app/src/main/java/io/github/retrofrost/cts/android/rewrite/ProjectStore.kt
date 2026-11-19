@@ -27,7 +27,7 @@ internal class ProjectStore(context: Context) {
     )
 
     fun restore(): CtsProject {
-        if (!file.baseFile.exists()) return emptyProject()
+        if (!file.baseFile.exists() && !File(file.baseFile.path + ".bak").exists()) return emptyProject()
         return runCatching {
             file.openRead().use { ProjectJson.decode(readTextLimited(it)) }
         }.getOrElse { error ->

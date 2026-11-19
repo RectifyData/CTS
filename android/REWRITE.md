@@ -1,4 +1,4 @@
-# Android v5 rewrite — Alpha 1
+# Android v5 rewrite — Alpha 2
 
 A clean Android editor and lifecycle, built on Jetpack Compose and the validated Rust frame core.
 The original M4 app remains on v5/development. The rewrite installs separately

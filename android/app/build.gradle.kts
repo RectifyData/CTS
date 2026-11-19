@@ -50,8 +50,8 @@ android {
         applicationId = "io.github.retrofrost.cts.android.v5.rewrite"
         minSdk = 26
         targetSdk = 36
-        versionCode = 5000100
-        versionName = "5.0.0-android-rewrite-alpha.1"
+        versionCode = 5000101
+        versionName = "5.0.0-android-rewrite-alpha.2"
         buildConfigField("boolean", "CTS_RUST_REQUIRED", ctsBuildRust.toString())
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"

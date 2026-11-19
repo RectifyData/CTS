@@ -78,20 +78,20 @@ jobs:
                   assert apk.read(path).startswith(b'\x7fELF'), f'Invalid ELF: {path}'
           PY
       - name: Name APK
-        run: cp android/app/build/outputs/apk/debug/app-debug.apk CTS-V5-Android-Rewrite-alpha1-debug.apk
+        run: cp android/app/build/outputs/apk/debug/app-debug.apk CTS-V5-Android-Rewrite-alpha2-debug.apk
       - uses: actions/upload-artifact@v4
         with:
-          name: CTS-V5-Android-Rewrite-alpha1-debug
-          path: CTS-V5-Android-Rewrite-alpha1-debug.apk
+          name: CTS-V5-Android-Rewrite-alpha2-debug
+          path: CTS-V5-Android-Rewrite-alpha2-debug.apk
           if-no-files-found: error
       - name: Publish Android V5 prerelease
         if: github.event_name == 'push' && github.ref == 'refs/heads/v5/android-rewrite'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          TAG=v5.0.0-android-rewrite-alpha.1
+          TAG=v5.0.0-android-rewrite-alpha.2
           if gh release view "$TAG" >/dev/null 2>&1; then
             echo "Android rewrite alpha was already published; preserving its release assets."
             exit 0
           fi
-          gh release create "$TAG" CTS-V5-Android-Rewrite-alpha1-debug.apk --target "$GITHUB_SHA" --title "Cubical Compare V5 Android — Rewrite Alpha 1" --prerelease --notes "A fresh Android editor built with Jetpack Compose. New empty projects, autosave, undo and redo, CSV import, card editing and ordering, media and Renderer3 import, and background MP4 export. Retains the tested Rust frame core and Renderer3/export compatibility engine. Installs alongside M4. AI integrations are not included. Debug-signed alpha; physical-device testing and remaining feature parity are pending."
+          gh release create "$TAG" CTS-V5-Android-Rewrite-alpha2-debug.apk --target "$GITHUB_SHA" --title "Cubical Compare V5 Android — Rewrite Alpha 2" --prerelease --notes "A fresh Android editor built with Jetpack Compose. New empty projects, autosave, undo and redo, CSV import, card editing and ordering, media and Renderer3 import, and background MP4 export. Retains the tested Rust frame core and Renderer3/export compatibility engine. Installs alongside M4. AI integrations are not included. The editor adapts its preview to short screens and avoids sending large CSV text through Android saved-instance-state. Debug-signed alpha; physical-device testing and remaining feature parity are pending."
