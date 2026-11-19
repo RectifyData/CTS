@@ -67,12 +67,13 @@ Native build (JDK 17, Gradle 8.13, SDK 36, NDK 27.2.12479018, Rust stable):
 
 ```bash
 rustup target add aarch64-linux-android armv7-linux-androideabi x86_64-linux-android
-cargo install cargo-ndk --locked
+cargo install cargo-ndk --version 4.1.2 --locked
 cargo test --manifest-path android/native/Cargo.toml --locked
 CTS_BUILD_RUST=1 gradle --project-dir android :app:testDebugUnitTest :app:assembleDebug
 ```
 
-Set ANDROID_NDK_HOME to the installed NDK directory. The preview workflow runs
+Set ANDROID_NDK_HOME and ANDROID_NDK_ROOT to the same installed NDK directory.
+The Gradle task uses cargo-ndk 4.1.2 with `-P 26` (uppercase P selects the Android API; lowercase p selects a Cargo package). The preview workflow runs
 Rust and Kotlin tests and verifies all three native libraries in the APK before
 publishing the M4 debug prerelease. Non-native host builds retain the Kotlin
 reference implementation. In a native Android build, a missing or incompatible

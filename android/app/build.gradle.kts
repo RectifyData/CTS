@@ -18,7 +18,7 @@ val buildRustCore = tasks.register<Exec>("buildRustCore") {
     inputs.files(fileTree(rustSource.asFile) { include("Cargo.toml", "Cargo.lock", "src/**") })
     outputs.dir(rustOutput)
     commandLine("cargo", "ndk", "-t", "arm64-v8a", "-t", "armeabi-v7a", "-t", "x86_64",
-        "-p", "26", "-o", rustOutput.get().asFile.absolutePath, "build", "--release", "--locked")
+        "-P", "26", "-o", rustOutput.get().asFile.absolutePath, "build", "--release", "--locked")
 }
 
 val ctsKeystorePath = providers.environmentVariable("CTS_ANDROID_KEYSTORE_PATH").orNull
@@ -44,13 +44,14 @@ if (ctsRequireStableSigning && !ctsStableSigningReady) {
 android {
     namespace = "io.github.retrofrost.cts.android"
     compileSdk = 36
+    ndkVersion = "27.2.12479018"
 
     defaultConfig {
         applicationId = "io.github.retrofrost.cts.android.v5"
         minSdk = 26
         targetSdk = 36
-        versionCode = 5000004
-        versionName = "5.0.0-android-m4-rust"
+        versionCode = 5000005
+        versionName = "5.0.0-android-m4-rust.3"
         buildConfigField("boolean", "CTS_RUST_REQUIRED", ctsBuildRust.toString())
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"

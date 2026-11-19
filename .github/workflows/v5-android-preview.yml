@@ -43,7 +43,9 @@ jobs:
           test -x "$SDK_MANAGER"
           ( set +o pipefail; yes | "$SDK_MANAGER" --sdk_root="$SDK_ROOT" --licenses >/dev/null )
           "$SDK_MANAGER" --sdk_root="$SDK_ROOT" 'platforms;android-36' 'build-tools;36.0.0' 'ndk;27.2.12479018'
-          echo "ANDROID_NDK_HOME=$SDK_ROOT/ndk/27.2.12479018" >> "$GITHUB_ENV"
+          for var in ANDROID_NDK_HOME ANDROID_NDK_ROOT ANDROID_NDK_LATEST_HOME; do
+            echo "$var=$SDK_ROOT/ndk/27.2.12479018" >> "$GITHUB_ENV"
+          done
       - name: Set up Gradle 8.13
         uses: gradle/actions/setup-gradle@v4
         with:
@@ -53,7 +55,9 @@ jobs:
           rustup toolchain install stable --profile minimal
           rustup default stable
           rustup target add aarch64-linux-android armv7-linux-androideabi x86_64-linux-android
-          cargo install cargo-ndk --locked
+          cargo install cargo-ndk --version 4.1.2 --locked
+          cargo ndk --version
+          cargo ndk --help | grep -E -- "-P,|--platform"
       - name: Test Rust renderer core
         run: |
           cargo test --manifest-path android/native/Cargo.toml --locked
@@ -85,7 +89,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          TAG=v5.0.0-android-m4-rust-preview.2
+          TAG=v5.0.0-android-m4-rust-preview.3
           if gh release view "$TAG" >/dev/null 2>&1; then
             echo "Android M4 Rust preview was already published; preserving its release assets."
             exit 0
