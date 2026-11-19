@@ -47,11 +47,11 @@ android {
     ndkVersion = "27.2.12479018"
 
     defaultConfig {
-        applicationId = "io.github.retrofrost.cts.android.v5"
+        applicationId = "io.github.retrofrost.cts.android.v5.rewrite"
         minSdk = 26
         targetSdk = 36
-        versionCode = 5000005
-        versionName = "5.0.0-android-m4-rust.3"
+        versionCode = 5000100
+        versionName = "5.0.0-android-rewrite-alpha.1"
         buildConfigField("boolean", "CTS_RUST_REQUIRED", ctsBuildRust.toString())
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"

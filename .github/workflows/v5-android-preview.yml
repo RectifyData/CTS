@@ -1,15 +1,15 @@
-name: CTS V5 Android M4 Rust + Compose
+name: CTS V5 Android Rewrite
 
 on:
   push:
-    branches: [v5/development, v5/renderer3-android, v5/android-renderer3-wrapped-ribbon]
+    branches: [v5/android-rewrite]
     paths:
       - 'android/**'
       - 'shared/**'
       - 'tools/sync_shared_contract.py'
       - '.github/workflows/v5-android-preview.yml'
   pull_request:
-    branches: [v5/development]
+    branches: [v5/android-rewrite]
   workflow_dispatch:
 
 permissions:
@@ -78,20 +78,20 @@ jobs:
                   assert apk.read(path).startswith(b'\x7fELF'), f'Invalid ELF: {path}'
           PY
       - name: Name APK
-        run: cp android/app/build/outputs/apk/debug/app-debug.apk CTS-V5-Android-M4-Rust-debug.apk
+        run: cp android/app/build/outputs/apk/debug/app-debug.apk CTS-V5-Android-Rewrite-alpha1-debug.apk
       - uses: actions/upload-artifact@v4
         with:
-          name: CTS-V5-Android-M4-Rust-debug
-          path: CTS-V5-Android-M4-Rust-debug.apk
+          name: CTS-V5-Android-Rewrite-alpha1-debug
+          path: CTS-V5-Android-Rewrite-alpha1-debug.apk
           if-no-files-found: error
       - name: Publish Android V5 prerelease
-        if: github.event_name == 'push' && github.ref == 'refs/heads/v5/development'
+        if: github.event_name == 'push' && github.ref == 'refs/heads/v5/android-rewrite'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          TAG=v5.0.0-android-m4-rust-preview.3
+          TAG=v5.0.0-android-rewrite-alpha.1
           if gh release view "$TAG" >/dev/null 2>&1; then
-            echo "Android M4 Rust preview was already published; preserving its release assets."
+            echo "Android rewrite alpha was already published; preserving its release assets."
             exit 0
           fi
-          gh release create "$TAG" CTS-V5-Android-M4-Rust-debug.apk --target "$GITHUB_SHA" --title "Cubical Compare V5 Android M4 — Rust + Compose" --prerelease --notes "Native Rust frame easing and SmartBadge selection for Android Renderer3 and built-in timelines; existing Compose UI and MediaCodec export retained. No AI SDK or API key required. Debug-signed preview, not final v5; unsupported legacy renderer types remain unsupported. Device validation and production signing pending."
+          gh release create "$TAG" CTS-V5-Android-Rewrite-alpha1-debug.apk --target "$GITHUB_SHA" --title "Cubical Compare V5 Android — Rewrite Alpha 1" --prerelease --notes "A fresh Android editor built with Jetpack Compose. New empty projects, autosave, undo and redo, CSV import, card editing and ordering, media and Renderer3 import, and background MP4 export. Retains the tested Rust frame core and Renderer3/export compatibility engine. Installs alongside M4. AI integrations are not included. Debug-signed alpha; physical-device testing and remaining feature parity are pending."
