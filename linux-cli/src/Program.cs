@@ -9,7 +9,7 @@ using Legacy = CubicalCompare.Windows;
 
 internal static class Program
 {
-    private const string Version = "5.0.0-debian-preview.1";
+    private static string Version => typeof(Program).Assembly.GetCustomAttributes(typeof(System.Reflection.AssemblyInformationalVersionAttribute), false).OfType<System.Reflection.AssemblyInformationalVersionAttribute>().FirstOrDefault()?.InformationalVersion.Split('+')[0] ?? "unknown";
     private static readonly CancellationTokenSource Stop = new();
     private static CancellationToken Token => Stop.Token;
     private static readonly HashSet<string> Flags = ["force", "fast", "no-audio", "no-badges"];
@@ -39,7 +39,7 @@ internal static class Program
         catch (Exception e) { Console.Error.WriteLine($"Error: {e.Message}"); return 1; }
     }
     private static void Help() => Console.WriteLine("""
-Cubical Compare CLI 5.0.0 Debian preview.1
+Cubical Compare CLI — Debian
 Usage:
   cubical-compare import cards.csv -o project.ccproject
   cubical-compare inspect project.ccproject [--renderer model.renderer3]

@@ -1,14 +1,23 @@
 #!/usr/bin/env bash
 set -euo pipefail
 cd -- "$(dirname -- "${BASH_SOURCE[0]}")"
-case "${1:-$(uname -m)}" in
+# Optional first positional architecture preserves the existing interface.
+arch_arg=$(uname -m)
+if [[ $# -gt 0 && "$1" != --* ]]; then arch_arg=$1; shift; fi
+if [[ "${1:-}" == --help ]]; then
+  echo 'Usage: bash build-debian.sh [amd64|arm64] [--source DIR] [--source-ref LABEL] [--version X.Y.Z] [--channel auto|stable|preview] [--revision N]'
+  exit 0
+fi
+case "$arch_arg" in
   x86_64|amd64|linux-x64) arch=amd64; rid=linux-x64;;
   aarch64|arm64|linux-arm64) arch=arm64; rid=linux-arm64;;
   *) echo 'Supported architectures: amd64, arm64' >&2; exit 2;;
 esac
-command -v dotnet >/dev/null || { echo 'Install .NET 10 SDK' >&2; exit 1; }
-python3 sync-upstream.py
-version=5.0.0~preview.1
+command -v dotnet >/dev/null || { echo 'Install the .NET SDK required by the source' >&2; exit 1; }
+python3 sync-upstream.py "$@"
+version=$(python3 -c 'import json; print(json.load(open("src/upstream.json"))["package_version"])')
+source=$(python3 -c 'import json; print(json.load(open("src/upstream.json"))["source_ref"])')
+echo "Building $version from $source ($arch)"
 mkdir -p dist
 work=$(mktemp -d)
 trap 'rm -rf -- "$work"' EXIT
@@ -17,6 +26,7 @@ portable="$work/cubical-compare"
 dotnet publish src/CubicalCompare.Cli.csproj -c Release -r "$rid" --self-contained true -o "$portable"
 install -m 644 ../LICENSE "$portable/LICENSE"
 install -m 644 README.md "$portable/README.md"
+install -m 644 src/upstream.json "$portable/UPSTREAM.json"
 test -x "$portable/cubical-compare"
 root="$work/pkg"
 mkdir -p "$root/DEBIAN" "$root/usr/lib/cubical-compare" "$root/usr/bin" "$root/usr/share/doc/cubical-compare"
@@ -36,8 +46,9 @@ Architecture: $arch
 Maintainer: Cubical Compare project
 Depends: ffmpeg, libfontconfig1, libfreetype6, libc6, libgcc-s1, libstdc++6, zlib1g, libicu76 | libicu72, libssl3t64 | libssl3, fonts-dejavu-core
 Description: Cubical Compare headless renderer and MP4 exporter
- Standalone Debian CLI based on the Windows V5 renderer source.
+ Standalone Debian CLI based on the selected Windows renderer source.
 CONTROL
 dpkg-deb --root-owner-group --build "$root" "dist/$name.deb"
 tar -C "$work" -czf "dist/$name.tar.gz" cubical-compare
-(cd dist; sha256sum "$name.deb" "$name.tar.gz" > "SHA256SUMS-$arch.txt")
+cp src/upstream.json "dist/UPSTREAM-$arch.json"
+(cd dist; sha256sum "$name.deb" "$name.tar.gz" "UPSTREAM-$arch.json" > "SHA256SUMS-$arch.txt")

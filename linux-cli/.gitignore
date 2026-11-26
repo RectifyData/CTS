@@ -1,4 +1,7 @@
 /src/Upstream/
+/src/Upstream.props
+/src/upstream.json
 /src/bin/
 /src/obj/
 /dist/
+/__pycache__/

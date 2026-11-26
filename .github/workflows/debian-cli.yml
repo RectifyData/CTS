@@ -1,6 +1,23 @@
 name: Cubical Compare Debian CLI
 on:
   workflow_dispatch:
+    inputs:
+      source_ref:
+        description: Windows source branch, tag or commit (blank uses builder checkout)
+        type: string
+        default: windows/main-preview
+      version:
+        description: Optional product version override
+        type: string
+        default: ''
+      channel:
+        type: choice
+        options: [auto, preview, stable]
+        default: auto
+      revision:
+        description: Debian packaging revision
+        type: string
+        default: '1'
   push:
     branches: [linux/debian-cli]
     paths:
@@ -10,7 +27,39 @@ on:
 permissions:
   contents: read
 jobs:
+  prepare:
+    runs-on: ubuntu-24.04
+    outputs:
+      sha: ${{ steps.meta.outputs.sha }}
+      ref: ${{ steps.meta.outputs.ref }}
+      sdk: ${{ steps.meta.outputs.sdk }}
+      app_version: ${{ steps.meta.outputs.app_version }}
+      channel: ${{ steps.meta.outputs.channel }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.source_ref || github.sha }}
+          path: windows-source
+      - id: meta
+        env:
+          SOURCE_REF: ${{ inputs.source_ref || github.ref_name }}
+          VERSION: ${{ inputs.version }}
+          CHANNEL: ${{ inputs.channel || 'auto' }}
+          REVISION: ${{ inputs.revision || '1' }}
+        run: |
+          args=(--source windows-source --source-ref "$SOURCE_REF" --channel "$CHANNEL" --revision "$REVISION")
+          if [[ -n "$VERSION" ]]; then args+=(--version "$VERSION"); fi
+          python3 linux-cli/sync-upstream.py "${args[@]}"
+          python3 - <<'PY'
+          import json,os
+          m=json.load(open('linux-cli/src/upstream.json'))
+          with open(os.environ['GITHUB_OUTPUT'],'a') as f:
+              for k,v in [('sha',m['source_sha']),('ref',m['source_ref']),('sdk',m['sdk']),('app_version',m['app_version']),('channel',m['channel'])]:
+                  print(f'{k}={v}',file=f)
+          PY
   build:
+    needs: prepare
     strategy:
       fail-fast: false
       matrix:
@@ -23,16 +72,32 @@ jobs:
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.sha }}
+          path: windows-source
       - uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '10.0.x'
-      - run: bash linux-cli/build-debian.sh '${{ matrix.arch }}'
+          dotnet-version: ${{ needs.prepare.outputs.sdk }}
+      - name: Build selected version
+        env:
+          SOURCE_REF: ${{ needs.prepare.outputs.ref }}
+          VERSION: ${{ inputs.version }}
+          CHANNEL: ${{ inputs.channel || 'auto' }}
+          REVISION: ${{ inputs.revision || '1' }}
+        run: |
+          args=(--source "$PWD/windows-source" --source-ref "$SOURCE_REF" --channel "$CHANNEL" --revision "$REVISION")
+          if [[ -n "$VERSION" ]]; then args+=(--version "$VERSION"); fi
+          bash linux-cli/build-debian.sh '${{ matrix.arch }}' "${args[@]}"
       - name: Debian 12 and 13 smoke tests
+        env:
+          EXPECTED_VERSION: ${{ needs.prepare.outputs.app_version }}
         run: |
           for version in 12 13; do
-            docker run --rm -v "$(realpath linux-cli):/src:ro" "debian:$version" bash -ec '
+            docker run --rm -e EXPECTED_VERSION -v "$(realpath linux-cli):/src:ro" "debian:$version" bash -ec '
               apt-get update
               apt-get install -y python3 ca-certificates /src/dist/*.deb
+              test "$(cubical-compare --version)" = "$EXPECTED_VERSION"
               bash /src/tests/smoke.sh
             '
           done
@@ -42,7 +107,7 @@ jobs:
           path: linux-cli/dist/*
           if-no-files-found: error
   release:
-    needs: build
+    needs: [prepare, build]
     runs-on: ubuntu-24.04
     permissions:
       contents: write
@@ -52,11 +117,21 @@ jobs:
           pattern: debian-*
           path: dist
           merge-multiple: true
-      - name: Publish verified prerelease
+      - name: Publish tested binaries
         env:
           GH_TOKEN: ${{ github.token }}
+          APP_VERSION: ${{ needs.prepare.outputs.app_version }}
+          SOURCE_SHA: ${{ needs.prepare.outputs.sha }}
+          CHANNEL: ${{ needs.prepare.outputs.channel }}
         run: |
           cd dist
           sha256sum -c SHA256SUMS-amd64.txt
           sha256sum -c SHA256SUMS-arm64.txt
-          gh release create "v5.0.0-debian-preview.${GITHUB_RUN_NUMBER}.${GITHUB_RUN_ATTEMPT}" ./*.deb ./*.tar.gz ./SHA256SUMS-*.txt --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "Cubical Compare V5 Debian CLI preview" --notes 'AMD64 and ARM64 Debian 12/13 smoke tests passed. Pixel-perfect parity is not certified.' --prerelease
+          python3 - <<'PY'
+          import json
+          a=json.load(open('UPSTREAM-amd64.json'))
+          b=json.load(open('UPSTREAM-arm64.json'))
+          assert a == b, 'Architecture source/version mismatch'
+          PY
+          # Always mark this experimental port as prerelease even for stable Windows sources.
+          gh release create "v${APP_VERSION}.${GITHUB_RUN_NUMBER}.${GITHUB_RUN_ATTEMPT}" ./*.deb ./*.tar.gz ./SHA256SUMS-*.txt ./UPSTREAM-*.json --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "Cubical Compare $APP_VERSION" --notes "Windows source: $SOURCE_SHA ($CHANNEL). AMD64 and ARM64 Debian 12/13 smoke tests passed. Pixel parity is not certified." --prerelease
