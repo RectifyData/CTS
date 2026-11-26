@@ -5,7 +5,7 @@ cd -- "$(dirname -- "${BASH_SOURCE[0]}")"
 arch_arg=$(uname -m)
 if [[ $# -gt 0 && "$1" != --* ]]; then arch_arg=$1; shift; fi
 if [[ "${1:-}" == --help ]]; then
-  echo 'Usage: bash build-debian.sh [amd64|arm64] [--source DIR] [--source-ref LABEL] [--version X.Y.Z] [--channel auto|stable|preview] [--revision N]'
+  echo 'Usage: bash build-debian.sh [amd64|arm64] [--source DIR] [--source-ref LABEL] [--version X.Y.Z] [--channel auto|stable|preview] [--revision N] [--deb]'
   exit 0
 fi
 case "$arch_arg" in
@@ -14,7 +14,20 @@ case "$arch_arg" in
   *) echo 'Supported architectures: amd64, arm64' >&2; exit 2;;
 esac
 command -v dotnet >/dev/null || { echo 'Install the .NET SDK required by the source' >&2; exit 1; }
-python3 sync-upstream.py "$@"
+# Portable is always built. Debian packaging is opt-in.
+make_deb=false
+source_args=()
+while (($#)); do
+  case "$1" in
+    --deb) make_deb=true; shift;;
+    --source|--source-ref|--version|--channel|--revision)
+      if (($# < 2)); then echo "Missing value for $1" >&2; exit 2; fi
+      source_args+=("$1" "$2"); shift 2;;
+    *) echo "Unknown argument: $1" >&2; exit 2;;
+  esac
+done
+if $make_deb; then command -v dpkg-deb >/dev/null || { echo 'Install dpkg for --deb' >&2; exit 1; }; fi
+python3 sync-upstream.py "${source_args[@]}"
 version=$(python3 -c 'import json; print(json.load(open("src/upstream.json"))["package_version"])')
 source=$(python3 -c 'import json; print(json.load(open("src/upstream.json"))["source_ref"])')
 echo "Building $version from $source ($arch)"
@@ -28,6 +41,12 @@ install -m 644 ../LICENSE "$portable/LICENSE"
 install -m 644 README.md "$portable/README.md"
 install -m 644 src/upstream.json "$portable/UPSTREAM.json"
 test -x "$portable/cubical-compare"
+archive="$name-portable.tar.gz"
+tar -C "$work" -czf "$work/$archive" cubical-compare
+cp "$work/$archive" "dist/$archive"
+cp src/upstream.json "dist/UPSTREAM-$arch.json"
+artifacts=("$archive" "UPSTREAM-$arch.json")
+if $make_deb; then
 root="$work/pkg"
 mkdir -p "$root/DEBIAN" "$root/usr/lib/cubical-compare" "$root/usr/bin" "$root/usr/share/doc/cubical-compare"
 cp -a "$portable/." "$root/usr/lib/cubical-compare/"
@@ -49,6 +68,8 @@ Description: Cubical Compare headless renderer and MP4 exporter
  Standalone Debian CLI based on the selected Windows renderer source.
 CONTROL
 dpkg-deb --root-owner-group --build "$root" "dist/$name.deb"
-tar -C "$work" -czf "dist/$name.tar.gz" cubical-compare
-cp src/upstream.json "dist/UPSTREAM-$arch.json"
-(cd dist; sha256sum "$name.deb" "$name.tar.gz" "UPSTREAM-$arch.json" > "SHA256SUMS-$arch.txt")
+artifacts+=("$name.deb")
+fi
+(cd dist; sha256sum "${artifacts[@]}" > "SHA256SUMS-$arch.txt")
+printf 'Portable archive: %s\n' "$PWD/dist/$archive"
+if $make_deb; then printf 'Optional Debian package: %s\n' "$PWD/dist/$name.deb"; fi

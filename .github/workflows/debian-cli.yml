@@ -1,4 +1,4 @@
-name: Cubical Compare Debian CLI
+name: Cubical Compare Debian CLI Portable
 on:
   workflow_dispatch:
     inputs:
@@ -89,22 +89,34 @@ jobs:
           args=(--source "$PWD/windows-source" --source-ref "$SOURCE_REF" --channel "$CHANNEL" --revision "$REVISION")
           if [[ -n "$VERSION" ]]; then args+=(--version "$VERSION"); fi
           bash linux-cli/build-debian.sh '${{ matrix.arch }}' "${args[@]}"
-      - name: Debian 12 and 13 smoke tests
+      - name: Debian 12 and 13 portable smoke tests
         env:
           EXPECTED_VERSION: ${{ needs.prepare.outputs.app_version }}
         run: |
           for version in 12 13; do
             docker run --rm -e EXPECTED_VERSION -v "$(realpath linux-cli):/src:ro" "debian:$version" bash -ec '
               apt-get update
-              apt-get install -y python3 ca-certificates /src/dist/*.deb
-              test "$(cubical-compare --version)" = "$EXPECTED_VERSION"
-              bash /src/tests/smoke.sh
+              apt-get install -y python3 ca-certificates ffmpeg libfontconfig1 libfreetype6 libc6 libgcc-s1 libstdc++6 zlib1g fonts-dejavu-core
+              if grep -q "^VERSION_ID=\"13\"" /etc/os-release; then
+                apt-get install -y libicu76 libssl3t64
+              else
+                apt-get install -y libicu72 libssl3
+              fi
+              mkdir -p /tmp/cc-portable
+              tar -xzf /src/dist/*-portable.tar.gz -C /tmp/cc-portable
+              cli=/tmp/cc-portable/cubical-compare/cubical-compare
+              test -x "$cli"
+              test "$("$cli" --version)" = "$EXPECTED_VERSION"
+              bash /src/tests/smoke.sh "$cli"
             '
           done
       - uses: actions/upload-artifact@v4
         with:
           name: debian-${{ matrix.arch }}
-          path: linux-cli/dist/*
+          path: |
+            linux-cli/dist/*-portable.tar.gz
+            linux-cli/dist/SHA256SUMS-*.txt
+            linux-cli/dist/UPSTREAM-*.json
           if-no-files-found: error
   release:
     needs: [prepare, build]
@@ -134,4 +146,4 @@ jobs:
           assert a == b, 'Architecture source/version mismatch'
           PY
           # Always mark this experimental port as prerelease even for stable Windows sources.
-          gh release create "v${APP_VERSION}.${GITHUB_RUN_NUMBER}.${GITHUB_RUN_ATTEMPT}" ./*.deb ./*.tar.gz ./SHA256SUMS-*.txt ./UPSTREAM-*.json --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "Cubical Compare $APP_VERSION" --notes "Windows source: $SOURCE_SHA ($CHANNEL). AMD64 and ARM64 Debian 12/13 smoke tests passed. Pixel parity is not certified." --prerelease
+          gh release create "v${APP_VERSION}.${GITHUB_RUN_NUMBER}.${GITHUB_RUN_ATTEMPT}" ./*-portable.tar.gz ./SHA256SUMS-*.txt ./UPSTREAM-*.json --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "Cubical Compare $APP_VERSION" --notes "Windows source: $SOURCE_SHA ($CHANNEL). AMD64 and ARM64 portable archives passed Debian 12/13 smoke tests. Pixel parity is not certified." --prerelease
