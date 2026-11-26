@@ -1,0 +1,62 @@
+name: Cubical Compare Debian CLI
+on:
+  workflow_dispatch:
+  push:
+    branches: [linux/debian-cli]
+    paths:
+      - 'linux-cli/**'
+      - 'windows/CubicalCompare/Core/**'
+      - '.github/workflows/debian-cli.yml'
+permissions:
+  contents: read
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - run: bash linux-cli/build-debian.sh '${{ matrix.arch }}'
+      - name: Debian 12 and 13 smoke tests
+        run: |
+          for version in 12 13; do
+            docker run --rm -v "$(realpath linux-cli):/src:ro" "debian:$version" bash -ec '
+              apt-get update
+              apt-get install -y python3 ca-certificates /src/dist/*.deb
+              bash /src/tests/smoke.sh
+            '
+          done
+      - uses: actions/upload-artifact@v4
+        with:
+          name: debian-${{ matrix.arch }}
+          path: linux-cli/dist/*
+          if-no-files-found: error
+  release:
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: debian-*
+          path: dist
+          merge-multiple: true
+      - name: Publish verified prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cd dist
+          sha256sum -c SHA256SUMS-amd64.txt
+          sha256sum -c SHA256SUMS-arm64.txt
+          gh release create "v5.0.0-debian-preview.${GITHUB_RUN_NUMBER}.${GITHUB_RUN_ATTEMPT}" ./*.deb ./*.tar.gz ./SHA256SUMS-*.txt --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "Cubical Compare V5 Debian CLI preview" --notes 'AMD64 and ARM64 Debian 12/13 smoke tests passed. Pixel-perfect parity is not certified.' --prerelease
